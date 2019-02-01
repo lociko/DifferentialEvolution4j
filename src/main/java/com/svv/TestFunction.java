@@ -18,7 +18,7 @@ public class TestFunction {
     }
 
     public static double[] randomizedCos(int limit) {
-        PrimitiveIterator.OfDouble r = new Random().doubles(0, 0.3).iterator();
+        PrimitiveIterator.OfDouble r = new Random().doubles(-0.15, 0.15).iterator();
 
         return DoubleStream.of(cos(limit))
                 .map(i -> i + r.next())

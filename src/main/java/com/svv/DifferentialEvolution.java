@@ -15,19 +15,46 @@ import java.util.stream.Stream;
  */
 public class DifferentialEvolution {
 
-    private static double mutationFactor = 0.8;
-    private double crossPoint = 0.7;
+    private final double mutationFactor = 0.8;
+    private final double crossPoint = 0.7;
 
-    public double[] de(int popsize, double[] boundaries, Function<double[], Double> function, int its) {
-        double population[][] = init(popsize, boundaries, 6);
+    private final int popsize;
 
+    private double[] boundaries;
+    private double[][] population;
+
+    PrimitiveIterator.OfDouble crosspointRandomizer = new Random()
+            .doubles(0, 1).iterator();
+
+    PrimitiveIterator.OfDouble valueRandomizer;
+
+    private DifferentialEvolution(double[] boundaries, int popSize) {
+        this.boundaries = boundaries;
+        this.popsize = popSize;
+
+        valueRandomizer = new Random().doubles(boundaries[0], boundaries[1]).iterator();
+    }
+
+    public DifferentialEvolution(int popSize, double[] boundaries) {
+        this(boundaries, popSize);
+        this.population = init(popSize, 6);
+    }
+
+    public DifferentialEvolution(double[][] population, double[] boundaries) {
+        this(boundaries, population.length);
+        this.population = population;
+    }
+
+    public double[] de(Function<double[], Double> function, int its) {
         List<PopulationVector> evaluated = eval(population, function);
+
         PopulationVector best = evaluated.stream().min(Comparator.comparing(PopulationVector::getValue)).get();
 
         for (int i = 0; i < its; i++) {
             for (int j = 0; j < popsize; j++) {
-                int[] indx = randomSelect(popsize, j);
-                double[] mutant = mutationVector(population, indx);
+                int[] randomIndx = randomSelect(popsize, j);
+
+                double[] mutant = mutationVector(population, randomIndx);
                 double[] trialVector = recombination(population[j], mutant, boundaries);
 
                 Double trialValue = function.apply(trialVector);
@@ -36,7 +63,6 @@ public class DifferentialEvolution {
                     population[j] = trialVector;
 
                     if (trialValue < best.value) {
-                        System.out.println(trialValue);
                         best = new PopulationVector(trialValue, trialVector);
                     }
                 }
@@ -48,12 +74,10 @@ public class DifferentialEvolution {
 
     private double[] recombination(double[] originalVector, double[] mutant, double[] boundaries) {
         double[] trialVector = new double[originalVector.length];
-        PrimitiveIterator.OfDouble rand = new Random()
-                .doubles(0, 1).iterator();
 
         for (int i = 0; i < originalVector.length; i++) {
-            if (rand.next() < crossPoint) {
-                trialVector[i] = /*boundaries[0] + */mutant[i]/* * (boundaries[1] - boundaries[0])*/;
+            if (crosspointRandomizer.next() < crossPoint) {
+                trialVector[i] = mutant[i];
             } else {
                 trialVector[i] = originalVector[i];
             }
@@ -62,29 +86,31 @@ public class DifferentialEvolution {
         return trialVector;
     }
 
-    private double[] mutationVector(double population[][], int[] indx) {
-        int vectorsize = population[0].length;
+    private double[] mutationVector(double[][] population, int[] indx) {
+        int vectorSize = population[0].length;
 
         double[] a = population[indx[0]];
         double[] b = population[indx[1]];
         double[] c = population[indx[2]];
 
-        double[] res = new double[vectorsize];
-        for (int i = 0; i < vectorsize; i++) {
-            res[i] = a[i] + mutationFactor * (b[i] - c[i]);
+        double[] mutant = new double[vectorSize];
+
+        for (int i = 0; i < vectorSize; i++) {
+            mutant[i] = a[i] + mutationFactor * (b[i] - c[i]);
         }
 
-        PrimitiveIterator.OfDouble rand = new Random().doubles(-3, 3).iterator();
-        double[] normalized = DoubleStream.of(res)
+        return normalization(mutant);
+    }
+
+    private double[] normalization(double[] mutant) {
+        return DoubleStream.of(mutant)
                 .map(d -> {
-                    if (d < -3 || d > 3)  {
-                        return rand.next();
+                    if (d < boundaries[0] || d > boundaries[1]) {
+                        return valueRandomizer.next();
                     } else {
                         return d;
                     }
                 }).toArray();
-
-        return normalized;
     }
 
     private List<PopulationVector> eval(double[][] population, Function<double[], Double> function) {
@@ -93,11 +119,8 @@ public class DifferentialEvolution {
                 .collect(Collectors.toList());
     }
 
-    private double[][] init(int popsize, double[] boundaries, int parameters) {
-        return Stream.generate(() -> new Random()
-                .doubles(boundaries[0], boundaries[1])
-                .limit(parameters)
-                .toArray())
+    private double[][] init(int popsize, int parameters) {
+        return Stream.generate(() -> Stream.generate(() -> valueRandomizer.nextDouble()).limit(parameters).toArray())
                 .limit(popsize)
                 .toArray(double[][]::new);
     }
@@ -110,22 +133,16 @@ public class DifferentialEvolution {
     }
 
     class PopulationVector {
-
         final Double value;
         final double[] pop;
 
         public PopulationVector(Double value, double[] pop) {
-
             this.value = value;
             this.pop = pop;
         }
 
         public Double getValue() {
             return value;
-        }
-
-        public double[] getPop() {
-            return pop;
         }
     }
 }
